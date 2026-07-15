@@ -1,0 +1,5 @@
+incident_date,crime_type,latitude,longitude,district
+2025-01-01,Theft,13.08,80.27,D1
+2025-01-02,Robbery,13.09,80.28,D2
+2025-01-03,Burglary,13.10,80.29,D2
+2025-01-03,Burglary,13.10,80.29,D2
