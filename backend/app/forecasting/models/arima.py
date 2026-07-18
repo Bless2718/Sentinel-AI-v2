@@ -20,7 +20,12 @@ class ARIMAForecastModel(ForecastModel):
         df: pd.DataFrame,
     ) -> None:
 
-        series = df.iloc[:, 0]
+        if "crime_count" not in df.columns:
+            raise ValueError(
+                "crime_count column not found."
+            )
+
+        series = df["crime_count"]
 
         self.model = ARIMA(
             series,

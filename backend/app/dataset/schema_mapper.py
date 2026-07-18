@@ -5,6 +5,8 @@ Maps uploaded dataset columns to Sentinel AI's
 canonical schema.
 """
 
+import pandas as pd
+
 from app.dataset.canonical_schema import CANONICAL_SCHEMA
 
 
@@ -41,11 +43,25 @@ class SchemaMapper:
 
         return mapping
 
+    def rename_dataframe(
+        self,
+        df: pd.DataFrame,
+        mapping: dict[str, str],
+    ) -> pd.DataFrame:
+        """
+        Renames dataframe columns to the
+        Sentinel AI canonical schema.
+        """
+
+        rename_dict = {
+            original: canonical
+            for canonical, original in mapping.items()
+        }
+
+        return df.rename(columns=rename_dict)
+
     @staticmethod
     def _normalize(name: str) -> str:
-        """
-        Normalize column names for comparison.
-        """
 
         return (
             name.strip()

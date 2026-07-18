@@ -1,8 +1,7 @@
 """
 Forecast Predictor
 
-Responsible for generating forecasts from
-a trained forecasting model.
+Generates forecasts using the selected model.
 """
 
 from app.forecasting.forecast_result import ForecastResult
@@ -11,7 +10,7 @@ from app.forecasting.model import ForecastModel
 
 class ForecastPredictor:
     """
-    Generates future forecasts.
+    Executes forecasting.
     """
 
     def predict(

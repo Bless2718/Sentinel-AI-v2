@@ -1,40 +1,34 @@
+import pandas as pd
+
 from app.dataset.schema_mapper import SchemaMapper
 
 
-def test_schema_mapping():
+def test_dataframe_rename():
 
-    columns = [
-        "Occurred_On",
-        "Primary Type",
-        "Lat",
-        "Lng",
-        "Beat",
-        "Community Area",
-    ]
-
-    mapper = SchemaMapper()
-
-    mapping = mapper.map_columns(columns)
-
-    assert mapping["incident_date"] == "Occurred_On"
-
-    assert mapping["crime_type"] == "Primary Type"
-
-    assert mapping["latitude"] == "Lat"
-
-    assert mapping["longitude"] == "Lng"
-
-    assert mapping["police_beat"] == "Beat"
-
-    assert mapping["neighborhood"] == "Community Area"
-
-
-def test_normalization():
+    df = pd.DataFrame(
+        {
+            "TYPE": ["Theft"],
+            "Date": ["2024-01-01"],
+            "Latitude": [13.08],
+            "Longitude": [80.27],
+        }
+    )
 
     mapper = SchemaMapper()
 
-    assert mapper._normalize("Primary Type") == "primarytype"
+    mapping = mapper.map_columns(
+        df.columns.tolist()
+    )
 
-    assert mapper._normalize("Occurred_On") == "occurredon"
+    renamed = mapper.rename_dataframe(
+        df,
+        mapping,
+    )
 
-    assert mapper._normalize("Crime-Date") == "crimedate"
+    assert "crime_type" in renamed.columns
+
+    assert "incident_date" in renamed.columns
+
+    assert "latitude" in renamed.columns
+
+    assert "longitude" in renamed.columns

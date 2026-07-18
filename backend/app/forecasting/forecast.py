@@ -6,7 +6,7 @@ Coordinates the complete forecasting workflow.
 
 import pandas as pd
 
-from app.forecasting.evaluator import ForecastEvaluator
+from app.forecasting.evaluation.evaluator import ForecastEvaluator
 from app.forecasting.forecast_result import ForecastResult
 from app.forecasting.model import ForecastModel
 from app.forecasting.predictor import ForecastPredictor

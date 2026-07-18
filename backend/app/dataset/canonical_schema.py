@@ -33,16 +33,16 @@ CANONICAL_SCHEMA = {
     # ==========================
     # Crime Information
     # ==========================
-
-    "crime_type": [
-        "crime_type",
-        "primary_type",
-        "offense",
-        "offence",
-        "crime_category",
-        "incident_type",
-        "category",
-    ],
+"crime_type": [
+    "crime_type",
+    "primary_type",
+    "offense",
+    "offence",
+    "crime_category",
+    "incident_type",
+    "category",
+    "type",
+],
 
     "description": [
         "description",
@@ -81,18 +81,20 @@ CANONICAL_SCHEMA = {
     ],
 
     "neighborhood": [
-        "neighborhood",
-        "community_area",
-        "community",
-        "ward",
-    ],
+    "neighborhood",
+    "neighbourhood",
+    "community_area",
+    "community",
+    "ward",
+],
 
     "location": [
-        "location",
-        "address",
-        "block",
-        "street",
-    ],
+    "location",
+    "address",
+    "block",
+    "street",
+    "hundred_block",
+],
 
     # ==========================
     # Case Information
