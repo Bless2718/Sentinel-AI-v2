@@ -1,3 +1,7 @@
+"""
+Base Forecast Model Interface
+"""
+
 from abc import ABC, abstractmethod
 
 import pandas as pd
@@ -11,9 +15,32 @@ class ForecastModel(ABC):
     """
 
     @abstractmethod
-    def train(self, df: pd.DataFrame) -> None:
-        """Train the forecasting model."""
+    def train(
+        self,
+        df: pd.DataFrame,
+    ) -> None:
+        """
+        Train the forecasting model.
+        """
+        pass
 
     @abstractmethod
-    def predict(self, periods: int) -> ForecastResult:
-        """Generate future predictions."""
+    def predict_validation(
+        self,
+        df: pd.DataFrame,
+    ) -> pd.Series:
+        """
+        Predict an existing validation dataset.
+        Used for evaluation only.
+        """
+        pass
+
+    @abstractmethod
+    def predict(
+        self,
+        periods: int,
+    ) -> ForecastResult:
+        """
+        Forecast future periods.
+        """
+        pass

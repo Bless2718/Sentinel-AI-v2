@@ -43,21 +43,41 @@ class RandomForestForecastModel(ForecastModel):
         df: pd.DataFrame,
     ) -> None:
 
-        data = df.copy()
+        self.training_data = df.copy()
 
-        self.training_data = data.copy()
-
-        x = data[self.feature_columns]
-        y = data["target"]
+        x = df[self.feature_columns]
+        y = df["target"]
 
         self.model.fit(x, y)
 
         self.last_features = x.iloc[[-1]].copy()
 
+    def predict_validation(
+        self,
+        df: pd.DataFrame,
+    ) -> pd.Series:
+        """
+        Predict an existing validation dataset.
+        Used only for model evaluation.
+        """
+
+        x = df[self.feature_columns]
+
+        predictions = self.model.predict(x)
+
+        return pd.Series(
+            predictions,
+            index=df.index,
+            name="prediction",
+        )
+
     def predict(
         self,
         periods: int,
     ) -> ForecastResult:
+        """
+        Forecast future periods recursively.
+        """
 
         predictions = self.predictor.predict(
             model=self.model,

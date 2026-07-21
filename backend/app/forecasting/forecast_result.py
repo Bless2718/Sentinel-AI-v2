@@ -18,3 +18,5 @@ class ForecastResult:
     rmse: float | None = None
 
     r2_score: float | None = None
+
+    confidence: float | None = None

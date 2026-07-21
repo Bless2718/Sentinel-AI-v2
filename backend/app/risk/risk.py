@@ -26,6 +26,7 @@ class RiskAssessmentService:
         self,
         prediction: float,
         all_predictions: list[float],
+        model_confidence: float,
     ) -> RiskResult:
 
         risk_score, risk_level = self.scorer.score(
@@ -63,7 +64,7 @@ class RiskAssessmentService:
                 )
             )
 
-        confidence = round(risk_score, 2)
+        confidence = round(model_confidence, 2)
 
         return RiskResult(
             risk_score=risk_score,

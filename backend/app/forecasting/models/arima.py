@@ -11,43 +11,62 @@ from app.forecasting.model import ForecastModel
 
 class ARIMAForecastModel(ForecastModel):
 
-    def __init__(self, order=(1, 1, 1)):
-        self.order = order
+    def __init__(self):
+
+        self.order = (2, 1, 2)
+
         self.model = None
+
+        self.training_series = None
 
     def train(
         self,
         df: pd.DataFrame,
     ) -> None:
 
-        if "crime_count" not in df.columns:
-            raise ValueError(
-                "crime_count column not found."
-            )
-
-        series = df["crime_count"]
+        self.training_series = df["target"].copy()
 
         self.model = ARIMA(
-            series,
+            self.training_series,
             order=self.order,
         ).fit()
+
+    def predict_validation(
+        self,
+        test_df: pd.DataFrame,
+    ) -> pd.Series:
+        """
+        Forecast the validation period immediately after
+        the training series.
+        """
+
+        predictions = self.model.forecast(
+            steps=len(test_df)
+        )
+
+        return pd.Series(
+            predictions,
+            index=test_df.index,
+            name="prediction",
+        )
 
     def predict(
         self,
         periods: int,
     ) -> ForecastResult:
+        """
+        Forecast future periods.
+        """
 
-        forecast = self.model.forecast(
+        predictions = self.model.forecast(
             steps=periods
         )
 
-        predictions = pd.DataFrame(
-            {
-                "prediction": forecast
-            }
-        )
-
         return ForecastResult(
-            predictions=predictions,
+            predictions=pd.DataFrame(
+                {
+                    "prediction": predictions
+                }
+            ),
             model_name="ARIMA",
         )

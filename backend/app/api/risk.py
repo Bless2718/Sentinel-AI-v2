@@ -44,6 +44,7 @@ async def assess_risk(dataset_id: str):
                 risk_service.assess(
                     prediction,
                     predictions,
+                    forecast.confidence,
                 )
             )
             for prediction in predictions

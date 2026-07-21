@@ -1,36 +1,73 @@
 """
 Forecast Trainer
 
-Responsible for preparing data and training forecasting models.
+Responsible for training and evaluating forecasting models.
 """
 
 import pandas as pd
+from sklearn.model_selection import train_test_split
 
 from app.forecasting.builders.feature_builder import ForecastFeatureBuilder
+from app.forecasting.evaluation.confidence import ConfidenceCalculator
+from app.forecasting.evaluation.evaluator import ForecastEvaluator
 from app.forecasting.model import ForecastModel
 
 
+
 class ForecastTrainer:
-    """
-    Trains forecasting models using engineered features.
-    """
 
     def __init__(self):
 
         self.feature_builder = ForecastFeatureBuilder()
 
+        self.evaluator = ForecastEvaluator()
+
+        self.confidence_calculator = ConfidenceCalculator()
+
     def train(
         self,
         model: ForecastModel,
         df: pd.DataFrame,
-    ) -> ForecastModel:
+    ):
 
         data = df.copy()
 
-        # Only engineer features for ML models
-        if model.__class__.__name__ != "ARIMAForecastModel":
-            data = self.feature_builder.build(data)
+        # ----------------------------------
+        # Feature Engineering (ML Models)
+        # ----------------------------------
 
+        data = self.feature_builder.build(data)
+
+        # ----------------------------------
+        # Chronological Train/Test Split
+        # ----------------------------------
+        train_df, test_df = train_test_split(
+            data,
+            test_size=0.2,
+            shuffle=False,
+        )
+
+        # ----------------------------------
+        # Train
+        # ----------------------------------
+        model.train(train_df)
+
+        # ----------------------------------
+        # Validation Prediction
+        # ----------------------------------
+        predictions = model.predict_validation(test_df)
+
+        # ----------------------------------
+        # Metrics
+        # ----------------------------------
+        metrics = self.evaluator.evaluate(
+            actual=test_df["target"],
+            predicted=predictions,
+        )
+        confidence = self.confidence_calculator.calculate(metrics)
+        # ----------------------------------
+        # Retrain on Full Dataset
+        # ----------------------------------
         model.train(data)
-
-        return model
+       
+        return model, metrics, confidence

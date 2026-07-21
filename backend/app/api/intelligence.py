@@ -7,6 +7,7 @@ from app.intelligence.intelligence import IntelligenceService
 from app.risk.risk import RiskAssessmentService
 from app.storage.dataset_store import DatasetStore
 
+
 router = APIRouter(
     prefix="/intelligence",
     tags=["Intelligence"],
@@ -46,6 +47,7 @@ async def generate_intelligence(dataset_id: str):
         risk = risk_service.assess(
             highest_prediction,
             predictions,
+            forecast.confidence,
         )
 
         intelligence = intelligence_service.generate(
