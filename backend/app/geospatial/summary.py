@@ -4,67 +4,88 @@ Geospatial Summary Generator
 
 from __future__ import annotations
 
-import pandas as pd
+from app.geospatial.models import (
+    Cluster,
+    GeospatialSummaryModel,
+    HeatmapPoint,
+    Hotspot,
+)
 
 
 class GeospatialSummary:
     """
-    Generates summary statistics from geospatial analysis.
+    Generates high-level dashboard summary from
+    lightweight geospatial intelligence objects.
     """
 
     def generate(
         self,
-        hotspots: pd.DataFrame,
-        clusters: pd.DataFrame,
-        density: pd.DataFrame,
-        risk: pd.DataFrame,
-        heatmap: pd.DataFrame,
-    ) -> dict:
+        hotspots: list[Hotspot],
+        clusters: list[Cluster],
+        heatmap: list[HeatmapPoint],
+    ) -> GeospatialSummaryModel:
 
-        cluster_count = 0
+        hotspot_count = len(hotspots)
 
-        if (
-            "cluster" in clusters.columns
-            and not clusters.empty
-        ):
-            cluster_count = (
-                clusters["cluster"]
-                .loc[clusters["cluster"] != -1]
-                .nunique()
-            )
-
-        highest_risk = (
-            float(risk["risk_score"].max())
-            if (
-                not risk.empty
-                and "risk_score" in risk.columns
-            )
-            else 0.0
+        cluster_count = len(
+            [
+                c
+                for c in clusters
+                if c.cluster_id != -1
+            ]
         )
 
-        average_density = (
-            float(density["density"].mean())
-            if (
-                not density.empty
-                and "density" in density.columns
-            )
-            else 0.0
-        )
+        if clusters:
 
-        max_density = (
-            float(density["density"].max())
-            if (
-                not density.empty
-                and "density" in density.columns
+            highest_risk = max(
+                cluster.risk_score
+                for cluster in clusters
             )
-            else 0.0
-        )
 
-        return {
-            "hotspot_count": len(hotspots),
-            "cluster_count": cluster_count,
-            "highest_risk_score": highest_risk,
-            "average_density": average_density,
-            "maximum_density": max_density,
-            "heatmap_points": len(heatmap),
-        }
+            average_density = (
+                sum(
+                    cluster.density
+                    for cluster in clusters
+                )
+                / len(clusters)
+            )
+
+            maximum_density = max(
+                cluster.density
+                for cluster in clusters
+            )
+
+        else:
+
+            highest_risk = 0.0
+
+            average_density = 0.0
+
+            maximum_density = 0.0
+
+        return GeospatialSummaryModel(
+
+            hotspot_count=hotspot_count,
+
+            cluster_count=cluster_count,
+
+            highest_risk_score=round(
+                highest_risk,
+                4,
+            ),
+
+            average_density=round(
+                average_density,
+                6,
+            ),
+
+            maximum_density=round(
+                maximum_density,
+                6,
+            ),
+
+            heatmap_points=len(
+                heatmap
+            ),
+
+        )

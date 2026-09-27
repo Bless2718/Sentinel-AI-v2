@@ -2,45 +2,49 @@
 Geographic Risk Assessment
 """
 
-import pandas as pd
+from __future__ import annotations
+
+from app.geospatial.models import Cluster
 
 
 class GeographicRiskAssessor:
     """
-    Calculates normalized geographic risk scores.
+    Computes normalized risk scores for each cluster.
+
+    Updates Cluster objects in-place instead of
+    creating another DataFrame.
     """
 
     def assess(
         self,
-        density: pd.DataFrame,
-    ) -> pd.DataFrame:
+        clusters: list[Cluster],
+    ) -> list[Cluster]:
 
-        required = [
-            "cluster",
-            "crime_count",
-            "density",
-        ]
+        if not clusters:
+            return []
 
-        missing = [
-            c
-            for c in required
-            if c not in density.columns
-        ]
-
-        if missing:
-            raise ValueError(
-                f"Missing columns: {missing}"
-            )
-
-        result = density.copy()
-
-        max_density = result["density"].max()
+        max_density = max(
+            cluster.density
+            for cluster in clusters
+        )
 
         if max_density == 0:
-            result["risk_score"] = 0.0
-        else:
-            result["risk_score"] = (
-                result["density"] / max_density
-            ).round(4)
 
-        return result
+            for cluster in clusters:
+                cluster.risk_score = 0.0
+
+            return clusters
+
+        for cluster in clusters:
+
+            cluster.risk_score = round(
+                cluster.density / max_density,
+                4,
+            )
+
+        clusters.sort(
+            key=lambda c: c.risk_score,
+            reverse=True,
+        )
+
+        return clusters

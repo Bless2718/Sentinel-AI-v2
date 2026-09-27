@@ -2,33 +2,93 @@
 Crime Density Analysis
 """
 
+from __future__ import annotations
+
 import pandas as pd
+
+from app.geospatial.models import Cluster
 
 
 class CrimeDensityAnalyzer:
     """
-    Calculates crime density for each spatial cluster.
+    Computes crime density for each spatial cluster.
+
+    Returns lightweight Cluster objects instead
+    of another DataFrame.
     """
+
+    REQUIRED_COLUMNS = [
+        "cluster",
+    ]
 
     def analyze(
         self,
         df: pd.DataFrame,
-    ) -> pd.DataFrame:
+    ) -> list[Cluster]:
 
-        if "cluster" not in df.columns:
+        missing = [
+            c
+            for c in self.REQUIRED_COLUMNS
+            if c not in df.columns
+        ]
+
+        if missing:
             raise ValueError(
-                "Missing 'cluster' column."
+                f"Missing columns: {missing}"
             )
 
-        density = (
-            df.groupby("cluster")
+        grouped = (
+            df.groupby(
+                "cluster",
+                as_index=False,
+            )
             .size()
-            .reset_index(name="crime_count")
+            .rename(
+                columns={
+                    "size": "crime_count"
+                }
+            )
         )
 
-        density["density"] = (
-            density["crime_count"]
-            / density["crime_count"].sum()
+        total_crimes = int(
+            grouped["crime_count"].sum()
         )
 
-        return density
+        clusters: list[Cluster] = []
+
+        for row in grouped.itertuples(index=False):
+
+            density = (
+                row.crime_count / total_crimes
+                if total_crimes > 0
+                else 0.0
+            )
+
+            clusters.append(
+
+                Cluster(
+
+                    cluster_id=int(
+                        row.cluster
+                    ),
+
+                    crime_count=int(
+                        row.crime_count
+                    ),
+
+                    density=float(
+                        density
+                    ),
+
+                    risk_score=0.0,
+
+                )
+
+            )
+
+        clusters.sort(
+            key=lambda c: c.crime_count,
+            reverse=True,
+        )
+
+        return clusters

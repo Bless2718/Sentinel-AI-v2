@@ -2,14 +2,18 @@
 Spatial Crime Clustering
 """
 
-import pandas as pd
+from __future__ import annotations
 
+import pandas as pd
 from sklearn.cluster import DBSCAN
 
 
 class SpatialClusterer:
     """
-    Groups nearby crime incidents into clusters.
+    Groups nearby crime incidents into spatial clusters.
+
+    Optimized by clustering only unique coordinate pairs
+    and merging the cluster labels back into the dataset.
     """
 
     def cluster(
@@ -22,8 +26,9 @@ class SpatialClusterer:
         required = ["latitude", "longitude"]
 
         missing = [
-            c for c in required
-            if c not in df.columns
+            column
+            for column in required
+            if column not in df.columns
         ]
 
         if missing:
@@ -31,19 +36,102 @@ class SpatialClusterer:
                 f"Missing columns: {missing}"
             )
 
+        # ---------------------------------------------------
+        # Copy dataset
+        # ---------------------------------------------------
+
         data = df.copy()
 
-        coordinates = data[
-            ["latitude", "longitude"]
-        ]
+      
+        # ---------------------------------------------------
+        # Remove invalid coordinates
+        # ---------------------------------------------------
+
+        invalid = (
+            (data["latitude"] == 0)
+            &
+            (data["longitude"] == 0)
+        )
+
+      
+
+        data = data.loc[~invalid].copy()
+
+       
+
+        # ---------------------------------------------------
+        # Remove missing coordinates
+        # ---------------------------------------------------
+
+        data = data.dropna(
+            subset=[
+                "latitude",
+                "longitude",
+            ]
+        )
+
+        # ---------------------------------------------------
+        # Unique coordinate pairs
+        # ---------------------------------------------------
+
+        unique_locations = (
+            data[
+                [
+                    "latitude",
+                    "longitude",
+                ]
+            ]
+            .drop_duplicates()
+            .reset_index(drop=True)
+        )
+
+
+        # ---------------------------------------------------
+        # DBSCAN
+        # ---------------------------------------------------
+
+       
 
         model = DBSCAN(
             eps=eps,
             min_samples=min_samples,
+            algorithm="ball_tree",
+            n_jobs=-1,
         )
 
-        data["cluster"] = model.fit_predict(
-            coordinates
+        unique_locations["cluster"] = model.fit_predict(
+            unique_locations[
+                [
+                    "latitude",
+                    "longitude",
+                ]
+            ]
         )
 
-        return data
+      
+
+        # ---------------------------------------------------
+        # Merge cluster labels back
+        # ---------------------------------------------------
+
+        clustered = data.merge(
+            unique_locations,
+            on=[
+                "latitude",
+                "longitude",
+            ],
+            how="left",
+        )
+
+        clustered["cluster"] = (
+            clustered["cluster"]
+            .fillna(-1)
+            .astype(int)
+        )
+
+       
+       
+
+       
+
+        return clustered

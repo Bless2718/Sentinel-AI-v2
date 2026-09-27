@@ -1,13 +1,23 @@
 """
-Heatmap Data Generator
+Heatmap Generator
 """
 
+from __future__ import annotations
+
 import pandas as pd
+
+from app.geospatial.models import (
+    GeoPoint,
+    HeatmapPoint,
+)
 
 
 class HeatmapGenerator:
     """
-    Generates heatmap-ready data.
+    Generates lightweight heatmap points.
+
+    Crimes occurring at the same coordinates
+    are aggregated into a single HeatmapPoint.
     """
 
     REQUIRED_COLUMNS = [
@@ -18,7 +28,7 @@ class HeatmapGenerator:
     def generate(
         self,
         df: pd.DataFrame,
-    ) -> pd.DataFrame:
+    ) -> list[HeatmapPoint]:
 
         missing = [
             c
@@ -31,15 +41,71 @@ class HeatmapGenerator:
                 f"Missing columns: {missing}"
             )
 
-        result = df.copy()
+        data = df.copy()
 
-        if "risk_score" not in result.columns:
-            result["risk_score"] = 1.0
+        if "risk_score" not in data.columns:
+            data["risk_score"] = 1.0
 
-        return result[
-            [
+        data = data.dropna(
+            subset=[
                 "latitude",
                 "longitude",
-                "risk_score",
             ]
-        ]
+        )
+
+        grouped = (
+            data.groupby(
+                [
+                    "latitude",
+                    "longitude",
+                ],
+                as_index=False,
+            )
+            .agg(
+                weight=("risk_score", "sum"),
+                crime_count=("risk_score", "size"),
+                average_risk=("risk_score", "mean"),
+            )
+            .sort_values(
+                "weight",
+                ascending=False,
+            )
+        )
+
+        heatmap: list[HeatmapPoint] = []
+
+        for row in grouped.itertuples(index=False):
+
+            heatmap.append(
+
+                HeatmapPoint(
+
+                    location=GeoPoint(
+
+                        latitude=float(
+                            row.latitude
+                        ),
+
+                        longitude=float(
+                            row.longitude
+                        ),
+
+                    ),
+
+                    weight=float(
+                        row.weight
+                    ),
+
+                    crime_count=int(
+                        row.crime_count
+                    ),
+
+                    average_risk=float(
+                        row.average_risk
+                    ),
+
+                )
+
+            )
+
+        return heatmap

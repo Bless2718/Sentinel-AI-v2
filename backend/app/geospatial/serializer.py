@@ -1,62 +1,62 @@
 """
-Geospatial Result Serializer
+Geospatial Serializer
 """
 
 from __future__ import annotations
 
-import pandas as pd
+from dataclasses import asdict, is_dataclass
+from math import isfinite
+from typing import Any
+
+from app.geospatial.models import GeospatialIntelligence
 
 
 class GeospatialSerializer:
     """
-    Converts geospatial analysis results into
-    API-friendly Python objects.
+    Converts a GeospatialIntelligence object into a
+    JSON-safe dictionary.
     """
-
-    @staticmethod
-    def dataframe_to_records(
-        df: pd.DataFrame,
-    ) -> list[dict]:
-
-        if df is None or df.empty:
-            return []
-
-        return df.to_dict(orient="records")
 
     def serialize(
         self,
-        summary: dict,
-        statistics: dict,
-        hotspots: pd.DataFrame,
-        clusters: pd.DataFrame,
-        density: pd.DataFrame,
-        risk: pd.DataFrame,
-        heatmap: pd.DataFrame,
+        intelligence: GeospatialIntelligence,
     ) -> dict:
 
-        return {
+        return self._clean(
+            asdict(intelligence)
+        )
 
-            "summary": summary,
+    def _clean(
+        self,
+        value: Any,
+    ) -> Any:
 
-            "statistics": statistics,
+        if is_dataclass(value):
+            value = asdict(value)
 
-            "hotspots": self.dataframe_to_records(
-                hotspots
-            ),
+        if isinstance(value, dict):
+            return {
+                k: self._clean(v)
+                for k, v in value.items()
+            }
 
-            "clusters": self.dataframe_to_records(
-                clusters
-            ),
+        if isinstance(value, list):
+            return [
+                self._clean(v)
+                for v in value
+            ]
 
-            "density": self.dataframe_to_records(
-                density
-            ),
+        if isinstance(value, tuple):
+            return tuple(
+                self._clean(v)
+                for v in value
+            )
 
-            "risk": self.dataframe_to_records(
-                risk
-            ),
+        if isinstance(value, float):
 
-            "heatmap": self.dataframe_to_records(
-                heatmap
-            ),
-        }
+            if not isfinite(value):
+                return None
+
+            return round(value, 6)
+
+        return value

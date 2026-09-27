@@ -89,10 +89,6 @@ class XGBoostForecastModel(ForecastModel):
         )
 
         return ForecastResult(
-            predictions=pd.DataFrame(
-                {
-                    "prediction": predictions
-                }
-            ),
+            predictions=predictions,
             model_name="XGBoost",
-        )
+    )

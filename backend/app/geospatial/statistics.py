@@ -4,117 +4,99 @@ Geospatial Statistics Generator
 
 from __future__ import annotations
 
-import pandas as pd
+from app.geospatial.models import (
+    Cluster,
+    GeospatialStatisticsModel,
+)
 
 
 class GeospatialStatistics:
     """
-    Generates detailed statistics from geospatial analysis.
+    Generates detailed statistics from
+    lightweight Cluster objects.
     """
 
     def generate(
         self,
-        clusters: pd.DataFrame,
-        risk: pd.DataFrame,
-    ) -> dict:
+        clusters: list[Cluster],
+    ) -> GeospatialStatisticsModel:
 
-        cluster_sizes = {}
+        if not clusters:
 
-        if (
-            not clusters.empty
-            and "cluster" in clusters.columns
-        ):
+            return GeospatialStatisticsModel()
 
-            valid_clusters = clusters[
-                clusters["cluster"] != -1
+        total_clusters = len(clusters)
+
+        active_clusters = len(
+            [
+                cluster
+                for cluster in clusters
+                if cluster.cluster_id != -1
             ]
-
-            cluster_sizes = (
-                valid_clusters["cluster"]
-                .value_counts()
-                .sort_index()
-                .to_dict()
-            )
-
-        total_incidents = len(clusters)
-
-        clustered_incidents = (
-            len(clusters[clusters["cluster"] != -1])
-            if "cluster" in clusters.columns
-            else 0
         )
 
-        noise_incidents = (
-            len(clusters[clusters["cluster"] == -1])
-            if "cluster" in clusters.columns
-            else 0
+        isolated_points = len(
+            [
+                cluster
+                for cluster in clusters
+                if cluster.cluster_id == -1
+            ]
         )
 
-        largest_cluster = (
-            max(cluster_sizes.values())
-            if cluster_sizes
-            else 0
+        total_crimes = sum(
+            cluster.crime_count
+            for cluster in clusters
+        )
+
+        largest_cluster = max(
+            cluster.crime_count
+            for cluster in clusters
         )
 
         average_cluster_size = (
-            sum(cluster_sizes.values()) / len(cluster_sizes)
-            if cluster_sizes
+            total_crimes / total_clusters
+            if total_clusters
             else 0.0
         )
 
-        risk_scores = (
-            risk["risk_score"]
-            if (
-                not risk.empty
-                and "risk_score" in risk.columns
+        average_risk = (
+            sum(
+                cluster.risk_score
+                for cluster in clusters
             )
-            else pd.Series(dtype=float)
+            / total_clusters
         )
 
-        return {
+        highest_risk = max(
+            cluster.risk_score
+            for cluster in clusters
+        )
 
-            "total_incidents": total_incidents,
+        return GeospatialStatisticsModel(
 
-            "clustered_incidents": clustered_incidents,
+            total_clusters=total_clusters,
 
-            "noise_incidents": noise_incidents,
+            active_clusters=active_clusters,
 
-            "cluster_count": len(cluster_sizes),
+            isolated_points=isolated_points,
 
-            "largest_cluster": largest_cluster,
+            total_crimes=total_crimes,
 
-            "average_cluster_size": round(
+            average_cluster_size=round(
                 average_cluster_size,
                 2,
             ),
 
-            "cluster_distribution": cluster_sizes,
+            largest_cluster_size=largest_cluster,
 
-            "average_risk": round(
-                float(risk_scores.mean())
-                if not risk_scores.empty
-                else 0.0,
+            average_risk_score=round(
+                average_risk,
                 4,
             ),
 
-            "median_risk": round(
-                float(risk_scores.median())
-                if not risk_scores.empty
-                else 0.0,
+            highest_risk_score=round(
+                highest_risk,
                 4,
             ),
 
-            "maximum_risk": round(
-                float(risk_scores.max())
-                if not risk_scores.empty
-                else 0.0,
-                4,
-            ),
-
-            "minimum_risk": round(
-                float(risk_scores.min())
-                if not risk_scores.empty
-                else 0.0,
-                4,
-            ),
-        }
+        )

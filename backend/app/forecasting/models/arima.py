@@ -61,12 +61,22 @@ class ARIMAForecastModel(ForecastModel):
         predictions = self.model.forecast(
             steps=periods
         )
-
+        last_period = len(
+        self.training_series
+    )
+        result = pd.DataFrame(
+        {
+            "prediction": predictions
+        }
+    )
+        result["period"] = range(
+        last_period,
+        last_period + periods,
+    )
         return ForecastResult(
-            predictions=pd.DataFrame(
-                {
-                    "prediction": predictions
-                }
-            ),
-            model_name="ARIMA",
-        )
+        predictions=result[
+            ["period", "prediction"]
+        ],
+        model_name="ARIMA",
+    )
+        

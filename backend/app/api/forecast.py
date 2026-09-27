@@ -1,59 +1,106 @@
+"""
+Forecast API
+"""
+
+from __future__ import annotations
+
 from fastapi import APIRouter, HTTPException
 
 from app.forecasting.pipeline import ForecastPipeline
+from app.forecasting.intelligence_builder import (
+    ForecastIntelligenceBuilder,
+)
 from app.storage.dataset_store import DatasetStore
+from app.storage.intelligence_store import (
+    intelligence_store,
+)
+
 
 router = APIRouter(
     prefix="/forecast",
     tags=["Forecast"],
 )
 
+
 store = DatasetStore()
+
 pipeline = ForecastPipeline()
 
-
-def serialize_forecast(result):
-    """
-    Convert ForecastResult into JSON-safe data.
-    """
-
-    return {
-        "model_name": result.model_name,
-        "predictions": result.predictions.to_dict(
-            orient="records"
-        ),
-        "mae": (
-            float(result.mae)
-            if result.mae is not None
-            else None
-        ),
-        "rmse": (
-            float(result.rmse)
-            if result.rmse is not None
-            else None
-        ),
-        "r2_score": (
-            float(result.r2_score)
-            if result.r2_score is not None
-            else None
-        ),
-    }
+intelligence_builder = ForecastIntelligenceBuilder()
 
 
 @router.post("/{dataset_id}")
-async def forecast(dataset_id: str):
+async def forecast(
+    dataset_id: str,
+):
 
-    path = store.path(dataset_id)
+    # -------------------------------------------------
+    # Find dataset
+    # -------------------------------------------------
 
-    if not path.exists():
+    path = store.path(
+        dataset_id
+    )
+
+    if (
+        path is None
+        or not path.exists()
+    ):
+
         raise HTTPException(
             status_code=404,
             detail="Dataset not found.",
         )
 
-    results = pipeline.run(path)
+    # -------------------------------------------------
+    # Run forecasting
+    # -------------------------------------------------
 
-    return {
-        model_name: serialize_forecast(result)
-        for model_name, result in results.items()
-    }
+    results = pipeline.run(
+        path,
+        periods=12,
+    )
+
+    # -------------------------------------------------
+    # Build compact forecast intelligence
+    # -------------------------------------------------
+
+    forecast_intelligence = (
+        intelligence_builder.build(
+            results
+        )
+    )
+
+    # -------------------------------------------------
+    # Load existing intelligence
+    # -------------------------------------------------
+
+    existing = intelligence_store.get(
+        dataset_id
+    )
+
+    if existing is None:
+        existing = {}
+
+    # -------------------------------------------------
+    # Add forecast intelligence
+    # -------------------------------------------------
+
+    existing["forecast"] = (
+        forecast_intelligence
+    )
+
+    # -------------------------------------------------
+    # Persist intelligence
+    # -------------------------------------------------
+
+    intelligence_store.save(
+        dataset_id,
+        existing,
+    )
+
+    # -------------------------------------------------
+    # Return forecast intelligence
+    # -------------------------------------------------
+
+    return forecast_intelligence

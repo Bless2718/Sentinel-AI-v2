@@ -86,10 +86,5 @@ class RandomForestForecastModel(ForecastModel):
         )
 
         return ForecastResult(
-            predictions=pd.DataFrame(
-                {
-                    "prediction": predictions
-                }
-            ),
-            model_name="Random Forest",
-        )
+            predictions=predictions,
+             model_name="Random Forest")
