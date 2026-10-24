@@ -60,44 +60,58 @@ export async function ensureBackendReady(
 
 export async function uploadDataset(
   file: File,
+  onRetry?: (attempt: number) => void,
 ): Promise<DatasetUploadResponse> {
-  // The upload request itself wakes a sleeping Render instance.
-  // Do not gate uploads behind a separate, potentially failing health check.
+  // Retry transient connection failures common during Render cold starts.
+  // FormData is recreated each time so the same file can be resent.
+  const attempts = 4;
 
-  const formData = new FormData();
-  formData.append("file", file);
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
 
-  let response: Response;
-
-  try {
-    response = await fetch(
-      `${API_BASE_URL}/upload/`,
-      {
+      const response = await fetch(`${API_BASE_URL}/upload/`, {
         method: "POST",
         body: formData,
-      },
-    );
-  } catch {
-    throw new Error(
-      `Upload could not reach ${API_BASE_URL}. Verify NEXT_PUBLIC_API_URL and that the Render backend is running, then try again.`,
-    );
-  }
+      });
 
-  if (!response.ok) {
-    let detail = "Dataset upload failed.";
+      if (!response.ok) {
+        // Application errors must be shown rather than endlessly retried.
+        // A gateway error may be transient during service startup.
+        if ([502, 503, 504].includes(response.status) && attempt < attempts) {
+          onRetry?.(attempt);
+          await sleep(attempt * 5000);
+          continue;
+        }
 
-    try {
-      const data = await response.json();
-
-      if (data?.detail) {
-        detail = data.detail;
+        let detail = `Upload failed (HTTP ${response.status}).`;
+        try {
+          const data = await response.json();
+          if (typeof data?.detail === "string") detail = data.detail;
+        } catch {
+          // Preserve the HTTP status when the body isn't JSON.
+        }
+        throw new Error(detail);
       }
-    } catch {
-      // Keep default error.
-    }
 
-    throw new Error(detail);
+      return (await response.json()) as DatasetUploadResponse;
+    } catch (error) {
+      if (error instanceof Error && !(
+        error instanceof TypeError ||
+        error.name === "AbortError"
+      )) {
+        throw error;
+      }
+      if (attempt === attempts) {
+        throw new Error(
+          "Unable to complete the upload right now. Please try again shortly.",
+        );
+      }
+      onRetry?.(attempt);
+      await sleep(attempt * 5000);
+    }
   }
 
-  return response.json();
+  throw new Error("Unable to complete the upload right now.");
 }
