@@ -1,31 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   UploadCloud,
   FileSpreadsheet,
   CheckCircle2,
   Loader2,
-  Server,
-  ServerOff,
 } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 
-import {
-  ensureBackendReady,
-  uploadDataset,
-} from "../api";
+import { uploadDataset } from "../api";
 
 interface AnalysisUploadProps {
   onDatasetUploaded: (
     datasetId: string,
   ) => void;
 }
-
-type BackendState =
-  | "checking"
-  | "ready"
-  | "error";
 
 export default function AnalysisUpload({
   onDatasetUploaded,
@@ -42,34 +32,7 @@ export default function AnalysisUpload({
   const [datasetId, setDatasetId] =
     useState<string | null>(null);
 
-  const [backendState, setBackendState] =
-    useState<BackendState>("checking");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function prepareBackend() {
-      setBackendState("checking");
-
-      try {
-        await ensureBackendReady();
-
-        if (!cancelled) {
-          setBackendState("ready");
-        }
-      } catch {
-        if (!cancelled) {
-          setBackendState("error");
-        }
-      }
-    }
-
-    void prepareBackend();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [retryCount, setRetryCount] = useState(0);
 
   const {
     getRootProps,
@@ -97,16 +60,14 @@ export default function AnalysisUpload({
       setError(null);
       setDatasetId(null);
       setUploading(true);
+      setRetryCount(0);
+      onDatasetUploaded("");
 
       try {
-        setBackendState("checking");
-
-        const result =
-          await uploadDataset(
-            selectedFile,
-          );
-
-        setBackendState("ready");
+        const result = await uploadDataset(
+          selectedFile,
+          setRetryCount,
+        );
 
         setDatasetId(
           result.dataset_id,
@@ -116,8 +77,6 @@ export default function AnalysisUpload({
           result.dataset_id,
         );
       } catch (err) {
-        setBackendState("error");
-
         setError(
           err instanceof Error
             ? err.message
@@ -139,32 +98,6 @@ export default function AnalysisUpload({
       <p className="mt-2 font-serif text-slate-400">
         Upload a crime dataset to begin automated validation and forecasting.
       </p>
-
-      <div
-        className={`mt-5 flex items-center gap-3 rounded-xl border px-4 py-3 font-serif text-sm ${
-          backendState === "ready"
-            ? "border-emerald-400/[0.18] bg-emerald-500/[0.05] text-emerald-300"
-            : backendState === "error"
-              ? "border-amber-400/[0.18] bg-amber-500/[0.05] text-amber-200"
-              : "border-violet-400/[0.18] bg-violet-500/[0.05] text-violet-200"
-        }`}
-      >
-        {backendState === "checking" ? (
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-        ) : backendState === "ready" ? (
-          <Server className="h-4 w-4 shrink-0" />
-        ) : (
-          <ServerOff className="h-4 w-4 shrink-0" />
-        )}
-
-        <span>
-          {backendState === "checking"
-            ? "Connecting to Sentinel backend. Free hosting may take a short while to wake up..."
-            : backendState === "ready"
-              ? "Sentinel backend is ready."
-              : "Backend is still starting. Selecting a dataset will automatically retry the connection."}
-        </span>
-      </div>
 
       <div
         {...getRootProps()}
@@ -191,12 +124,16 @@ export default function AnalysisUpload({
         </h3>
 
         <p className="mt-2 font-serif text-slate-400">
-          CSV or Excel (.xlsx)
+          {uploading && retryCount > 0
+            ? "Connecting securely and retrying your upload..."
+            : "CSV or Excel (.xlsx)"}
         </p>
 
-        <p className="mt-4 font-serif text-sm text-slate-500">
-          or click to browse files
-        </p>
+        {!uploading && (
+          <p className="mt-4 font-serif text-sm text-slate-500">
+            or click to browse files
+          </p>
+        )}
       </div>
 
       {file && (
