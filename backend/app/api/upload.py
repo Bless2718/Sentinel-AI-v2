@@ -1,15 +1,21 @@
-"""
-Dataset Upload API
-"""
+"""Upload files quickly and profile them after the response is sent.
 
-import tempfile
+Note: FastAPI BackgroundTasks run in the web process; use a durable queue and
+persistent object storage before scaling to multiple instances or handling
+uploads that must survive restarts.
+"""
+import asyncio
+import json
+import logging
+import shutil
 from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from app.storage.dataset_store import DatasetStore
-
 from app.dataset.reader import DatasetReader
 from app.dataset.profiler import DatasetProfiler
 from app.dataset.schema_mapper import SchemaMapper
@@ -17,82 +23,78 @@ from app.dataset.validator import DatasetValidator
 from app.dataset.quality import QualityAssessment
 from app.dataset.readiness import DatasetReadiness
 
-router = APIRouter(
-    prefix="/upload",
-    tags=["Upload"],
-)
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/upload", tags=["Upload"])
+STATUS_DIR = Path("storage/upload_status")
+STATUS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-@router.post("/")
-async def upload_dataset(
-    file: UploadFile = File(...),
-):
-    # Save uploaded file temporarily
-    suffix = Path(file.filename).suffix
+def _status_path(dataset_id: str) -> Path:
+    return STATUS_DIR / f"{dataset_id}.json"
 
-    with tempfile.NamedTemporaryFile(
-        delete=False,
-        suffix=suffix,
-    ) as tmp:
 
-        tmp.write(await file.read())
-        path = Path(tmp.name)
+def _set_status(dataset_id: str, data: dict) -> None:
+    target = _status_path(dataset_id)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(".tmp")
+    temporary.write_text(json.dumps(data), encoding="utf-8")
+    temporary.replace(target)
 
-    # Initialize services
-    reader = DatasetReader()
-    profiler = DatasetProfiler()
-    mapper = SchemaMapper()
-    validator = DatasetValidator()
-    quality = QualityAssessment()
-    readiness = DatasetReadiness()
+
+def _process(dataset_id: str, path: Path, filename: str) -> None:
+    _set_status(dataset_id, {"dataset_id": dataset_id, "status": "processing"})
+    try:
+        reader = DatasetReader()
+        df = reader.read(path)
+        profile = DatasetProfiler().profile(df)
+        mapper = SchemaMapper()
+        mapping = mapper.map_columns(df.columns.tolist())
+        # No need to copy/rename the entire dataset to validate column names.
+        validation = DatasetValidator().validate(mapping)
+        quality = QualityAssessment().assess(profile)
+        readiness = DatasetReadiness().assess(validation, quality)
+        _set_status(dataset_id, {
+            "dataset_id": dataset_id,
+            "status": "completed",
+            "filename": filename,
+            "rows": profile.rows,
+            "columns": profile.columns,
+            "mapping": mapping,
+            "validation": asdict(validation),
+            "quality": asdict(quality),
+            "readiness": asdict(readiness),
+        })
+    except Exception:
+        logger.exception("Dataset processing failed for %s", dataset_id)
+        _set_status(dataset_id, {
+            "dataset_id": dataset_id,
+            "status": "failed",
+            "detail": "Dataset processing failed. Check the file format or contact support.",
+        })
+
+
+@router.post("/", status_code=202)
+async def upload_dataset(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+    filename = Path(file.filename or "dataset").name
+    suffix = Path(filename).suffix.lower()
+    if suffix not in {".csv", ".xlsx"}:
+        raise HTTPException(status_code=400, detail="Upload a CSV or XLSX dataset.")
+
     store = DatasetStore()
+    # Stream from the multipart spool, without loading the whole upload into memory.
+    await file.seek(0)
+    dataset_id = await run_in_threadpool(store.save_file, file.file, filename)
+    path = store.path(dataset_id)
+    _set_status(dataset_id, {"dataset_id": dataset_id, "status": "queued"})
+    background_tasks.add_task(_process, dataset_id, path, filename)
+    return {"dataset_id": dataset_id, "status": "queued"}
 
-    # Store dataset and generate dataset ID
-    dataset_id = store.save(
-    path,
-    file.filename,
-)
 
-    # Read dataset
-    df = reader.read(path)
-
-    # Profile dataset
-    profile = profiler.profile(df)
-
-    # Map dataset columns
-    mapping = mapper.map_columns(
-        df.columns.tolist()
-    )
-
-    # Rename dataframe to canonical schema
-    df = mapper.rename_dataframe(
-        df,
-        mapping,
-    )
-
-    # Validate schema
-    validation = validator.validate(
-        mapping
-    )
-
-    # Assess quality
-    quality_report = quality.assess(
-        profile
-    )
-
-    # Assess readiness
-    readiness_report = readiness.assess(
-        validation,
-        quality_report,
-    )
-
-    return {
-        "dataset_id": dataset_id,
-        "filename": file.filename,
-        "rows": profile.rows,
-        "columns": profile.columns,
-        "mapping": mapping,
-        "validation": asdict(validation),
-        "quality": asdict(quality_report),
-        "readiness": asdict(readiness_report),
-    }
+@router.get("/{dataset_id}/status")
+def upload_status(dataset_id: str):
+    if len(dataset_id) != 32 or not all(c in "0123456789abcdef" for c in dataset_id):
+        raise HTTPException(status_code=404, detail="Upload not found.")
+    path = _status_path(dataset_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Upload status not found.")
+    return json.loads(path.read_text(encoding="utf-8"))
