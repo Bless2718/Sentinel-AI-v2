@@ -19,9 +19,12 @@ interface CreateAnalysisButtonProps {
   configuration: AnalysisConfiguration;
 }
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://127.0.0.1:8000";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL?.trim() ||
+  (process.env.NODE_ENV === "production"
+    ? "https://sentinel-ai-backend-51dj.onrender.com"
+    : "http://127.0.0.1:8000")
+).replace(/\/$/, "");
 
 export default function CreateAnalysisButton({
   datasetId,
@@ -92,9 +95,11 @@ export default function CreateAnalysisButton({
       );
     } catch (err) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to generate analysis.",
+        err instanceof TypeError
+          ? "Cannot connect to the analysis service. Verify the backend deployment and try again."
+          : err instanceof Error
+            ? err.message
+            : "Unable to generate analysis.",
       );
 
       setLoading(false);
