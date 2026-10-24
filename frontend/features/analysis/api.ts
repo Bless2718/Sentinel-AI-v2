@@ -9,19 +9,22 @@ export interface DatasetUploadResponse {
   readiness: unknown;
 }
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "http://127.0.0.1:8000";
+const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL?.trim() ||
+  (process.env.NODE_ENV === "production"
+    ? "https://sentinel-ai-backend-51dj.onrender.com"
+    : "http://127.0.0.1:8000")
+).replace(/\/$/, "");
 
 const sleep = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 async function pingBackend(): Promise<boolean> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), 20000);
 
   try {
-    const response = await fetch(`${API_BASE_URL}/`, {
+    const response = await fetch(`${API_BASE_URL}/health/`, {
       method: "GET",
       cache: "no-store",
       signal: controller.signal,
@@ -51,16 +54,20 @@ export async function ensureBackendReady(
   }
 
   throw new Error(
-    "Sentinel backend is still waking up. Please wait a few seconds and try again.",
+    `Cannot connect to Sentinel backend at ${API_BASE_URL}. Check the Render backend status and NEXT_PUBLIC_API_URL configuration, then retry.`,
   );
 }
 
 export async function uploadDataset(
   file: File,
 ): Promise<DatasetUploadResponse> {
-  // Render free services can sleep after inactivity. Wake the backend
-  // before sending the file so the first upload does not fail.
-  await ensureBackendReady();
+  // Render free services may sleep. Try waking the server, but don't
+  // prevent a real upload solely because the health probe failed.
+  try {
+    await ensureBackendReady();
+  } catch {
+    // The upload request itself is the source of truth.
+  }
 
   const formData = new FormData();
   formData.append("file", file);
@@ -77,7 +84,7 @@ export async function uploadDataset(
     );
   } catch {
     throw new Error(
-      "Unable to reach the Sentinel backend. It may still be starting up. Please try again in a few seconds.",
+      `Upload could not reach ${API_BASE_URL}. Verify NEXT_PUBLIC_API_URL and that the Render backend is running, then try again.`,
     );
   }
 
