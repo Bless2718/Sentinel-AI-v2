@@ -207,7 +207,7 @@ async def generate_intelligence(
 
     forecast_results = (
         forecast_pipeline.run(
-            path,
+            df,
             periods=periods,
         )
     )
