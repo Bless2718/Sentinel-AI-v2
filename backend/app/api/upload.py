@@ -6,6 +6,7 @@ uploads that must survive restarts.
 """
 import json
 import logging
+from threading import Lock
 from dataclasses import asdict
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from app.dataset.quality import QualityAssessment
 from app.dataset.readiness import DatasetReadiness
 
 logger = logging.getLogger(__name__)
+processing_lock = Lock()  # One large dataset at a time per web process.
 router = APIRouter(prefix="/upload", tags=["Upload"])
 STATUS_DIR = Path("storage/upload_status")
 STATUS_DIR.mkdir(parents=True, exist_ok=True)
@@ -38,6 +40,12 @@ def _set_status(dataset_id: str, data: dict) -> None:
 
 
 def _process(dataset_id: str, path: Path, filename: str) -> None:
+    # Serialize memory-heavy dataset processing on small free-tier instances.
+    with processing_lock:
+        _process_locked(dataset_id, path, filename)
+
+
+def _process_locked(dataset_id: str, path: Path, filename: str) -> None:
     _set_status(dataset_id, {"dataset_id": dataset_id, "status": "processing"})
     try:
         columns, profile = profile_file(path)
