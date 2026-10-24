@@ -4,12 +4,9 @@ Note: FastAPI BackgroundTasks run in the web process; use a durable queue and
 persistent object storage before scaling to multiple instances or handling
 uploads that must survive restarts.
 """
-import asyncio
 import json
 import logging
-import shutil
 from dataclasses import asdict
-from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
@@ -74,7 +71,7 @@ def _process(dataset_id: str, path: Path, filename: str) -> None:
 
 
 @router.post("/", status_code=202)
-async def upload_dataset(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
+async def upload_dataset(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     filename = Path(file.filename or "dataset").name
     suffix = Path(filename).suffix.lower()
     if suffix not in {".csv", ".xlsx"}:
