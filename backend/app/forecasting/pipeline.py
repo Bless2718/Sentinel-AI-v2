@@ -40,7 +40,8 @@ class ForecastPipeline:
         if isinstance(dataset, Path):
             df = self.reader.read(dataset)
         else:
-            df = dataset.copy()
+            # The mapper returns a renamed DataFrame; avoid another full-sized copy.
+            df = dataset
 
         # -----------------------------------
         # Map uploaded columns
