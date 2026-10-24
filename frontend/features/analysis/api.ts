@@ -99,8 +99,9 @@ export async function uploadDataset(
   if (!datasetId) throw new Error("Upload could not be accepted.");
   onProcessing?.();
   // Poll after the POST is acknowledged. Do not resubmit a successfully accepted file.
-  for (let poll = 0; poll < 180; poll++) {
-    await sleep(3000);
+  let consecutiveFailures = 0;
+  for (let poll = 0; poll < 120; poll++) {
+    await sleep(consecutiveFailures ? Math.min(30000, 3000 * 2 ** Math.min(consecutiveFailures, 4)) : 5000);
     let statusResponse: Response;
     try {
       statusResponse = await fetch(
@@ -108,13 +109,16 @@ export async function uploadDataset(
         { cache: "no-store" },
       );
     } catch {
-      continue; // Momentary connectivity issue; keep polling.
-    }
-    if (!statusResponse.ok) {
-      // A transient restart or upstream failure can briefly hide status.
-      // Continue polling rather than requesting another large upload.
+      consecutiveFailures++;
+      if (consecutiveFailures >= 8) throw new Error("Processing was interrupted because the server became unavailable. Please try a smaller dataset.");
       continue;
     }
+    if (!statusResponse.ok) {
+      consecutiveFailures++;
+      if (consecutiveFailures >= 8) throw new Error("Processing was interrupted because the server became unavailable. Please try a smaller dataset.");
+      continue;
+    }
+    consecutiveFailures = 0;
     const result = await statusResponse.json();
     if (result.status === "completed") return result as DatasetUploadResponse;
     if (result.status === "failed") {
