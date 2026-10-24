@@ -186,9 +186,7 @@ export default function AnalysisUpload({
 
         <h3 className="mt-5 font-serif text-xl font-semibold tracking-[-0.01em] text-white">
           {uploading
-            ? backendState === "checking"
-              ? "Preparing Sentinel Backend..."
-              : "Uploading Dataset..."
+            ? "Uploading Dataset..."
             : "Drag & Drop Dataset"}
         </h3>
 
