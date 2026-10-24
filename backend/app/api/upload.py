@@ -13,8 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from starlette.concurrency import run_in_threadpool
 
 from app.storage.dataset_store import DatasetStore
-from app.dataset.reader import DatasetReader
-from app.dataset.profiler import DatasetProfiler
+from app.dataset.streaming_profile import profile_file
 from app.dataset.schema_mapper import SchemaMapper
 from app.dataset.validator import DatasetValidator
 from app.dataset.quality import QualityAssessment
@@ -41,11 +40,9 @@ def _set_status(dataset_id: str, data: dict) -> None:
 def _process(dataset_id: str, path: Path, filename: str) -> None:
     _set_status(dataset_id, {"dataset_id": dataset_id, "status": "processing"})
     try:
-        reader = DatasetReader()
-        df = reader.read(path)
-        profile = DatasetProfiler().profile(df)
+        columns, profile = profile_file(path)
         mapper = SchemaMapper()
-        mapping = mapper.map_columns(df.columns.tolist())
+        mapping = mapper.map_columns(columns)
         # No need to copy/rename the entire dataset to validate column names.
         validation = DatasetValidator().validate(mapping)
         quality = QualityAssessment().assess(profile)
