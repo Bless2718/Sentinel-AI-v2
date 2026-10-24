@@ -111,9 +111,8 @@ export async function uploadDataset(
       continue; // Momentary connectivity issue; keep polling.
     }
     if (!statusResponse.ok) {
-      if (statusResponse.status === 404) {
-        throw new Error("Upload processing was interrupted. Please upload again.");
-      }
+      // A transient restart or upstream failure can briefly hide status.
+      // Continue polling rather than requesting another large upload.
       continue;
     }
     const result = await statusResponse.json();
@@ -122,5 +121,5 @@ export async function uploadDataset(
       throw new Error(result.detail || "Dataset processing failed.");
     }
   }
-  throw new Error("Processing is taking longer than expected. Please try again later.");
+  throw new Error("Processing did not finish in time. The server may have restarted or run out of memory. Please check the backend logs.");
 }
