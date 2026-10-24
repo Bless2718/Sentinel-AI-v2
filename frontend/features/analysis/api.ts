@@ -61,13 +61,8 @@ export async function ensureBackendReady(
 export async function uploadDataset(
   file: File,
 ): Promise<DatasetUploadResponse> {
-  // Render free services may sleep. Try waking the server, but don't
-  // prevent a real upload solely because the health probe failed.
-  try {
-    await ensureBackendReady();
-  } catch {
-    // The upload request itself is the source of truth.
-  }
+  // The upload request itself wakes a sleeping Render instance.
+  // Do not gate uploads behind a separate, potentially failing health check.
 
   const formData = new FormData();
   formData.append("file", file);
