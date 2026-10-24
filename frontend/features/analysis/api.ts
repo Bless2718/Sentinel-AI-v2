@@ -61,57 +61,66 @@ export async function ensureBackendReady(
 export async function uploadDataset(
   file: File,
   onRetry?: (attempt: number) => void,
+  onProcessing?: () => void,
 ): Promise<DatasetUploadResponse> {
-  // Retry transient connection failures common during Render cold starts.
-  // FormData is recreated each time so the same file can be resent.
-  const attempts = 4;
-
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+  let datasetId: string | null = null;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const formData = new FormData();
+    formData.append("file", file);
+    let response: Response;
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch(`${API_BASE_URL}/upload/`, {
+      response = await fetch(`${API_BASE_URL}/upload/`, {
         method: "POST",
         body: formData,
       });
-
-      if (!response.ok) {
-        // Application errors must be shown rather than endlessly retried.
-        // A gateway error may be transient during service startup.
-        if ([502, 503, 504].includes(response.status) && attempt < attempts) {
-          onRetry?.(attempt);
-          await sleep(attempt * 5000);
-          continue;
-        }
-
-        let detail = `Upload failed (HTTP ${response.status}).`;
-        try {
-          const data = await response.json();
-          if (typeof data?.detail === "string") detail = data.detail;
-        } catch {
-          // Preserve the HTTP status when the body isn't JSON.
-        }
-        throw new Error(detail);
-      }
-
-      return (await response.json()) as DatasetUploadResponse;
-    } catch (error) {
-      if (error instanceof Error && !(
-        error instanceof TypeError ||
-        error.name === "AbortError"
-      )) {
-        throw error;
-      }
-      if (attempt === attempts) {
-        throw new Error(
-          "Unable to complete the upload right now. Please try again shortly.",
-        );
-      }
+    } catch {
+      if (attempt === 3) throw new Error("Could not send the file. Please try again.");
       onRetry?.(attempt);
       await sleep(attempt * 5000);
+      continue;
+    }
+    if ([502, 503, 504].includes(response.status) && attempt < 3) {
+      onRetry?.(attempt);
+      await sleep(attempt * 5000);
+      continue;
+    }
+    if (!response.ok) {
+      let detail = `Upload failed (HTTP ${response.status}).`;
+      try {
+        const data = await response.json();
+        if (typeof data.detail === "string") detail = data.detail;
+      } catch {}
+      throw new Error(detail);
+    }
+    const result = await response.json();
+    datasetId = result.dataset_id;
+    break;
+  }
+  if (!datasetId) throw new Error("Upload could not be accepted.");
+  onProcessing?.();
+  // Poll after the POST is acknowledged. Do not resubmit a successfully accepted file.
+  for (let poll = 0; poll < 180; poll++) {
+    await sleep(3000);
+    let statusResponse: Response;
+    try {
+      statusResponse = await fetch(
+        `${API_BASE_URL}/upload/${datasetId}/status`,
+        { cache: "no-store" },
+      );
+    } catch {
+      continue; // Momentary connectivity issue; keep polling.
+    }
+    if (!statusResponse.ok) {
+      if (statusResponse.status === 404) {
+        throw new Error("Upload processing was interrupted. Please upload again.");
+      }
+      continue;
+    }
+    const result = await statusResponse.json();
+    if (result.status === "completed") return result as DatasetUploadResponse;
+    if (result.status === "failed") {
+      throw new Error(result.detail || "Dataset processing failed.");
     }
   }
-
-  throw new Error("Unable to complete the upload right now.");
+  throw new Error("Processing is taking longer than expected. Please try again later.");
 }
