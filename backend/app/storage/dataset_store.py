@@ -4,6 +4,9 @@ Dataset Storage
 
 import json
 import shutil
+from threading import Lock
+
+_registry_lock = Lock()
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -57,6 +60,23 @@ class DatasetStore:
 
         self._save(registry)
 
+        return dataset_id
+
+    def save_file(self, source, original_filename: str) -> str:
+        """Save a stream without materializing the whole file in RAM."""
+        dataset_id = uuid4().hex
+        suffix = Path(original_filename).suffix.lower()
+        destination = self.STORAGE_DIR / f"{dataset_id}{suffix}"
+        with destination.open("wb") as output:
+            shutil.copyfileobj(source, output, length=1024 * 1024)
+        with _registry_lock:
+            registry = self._load()
+            registry[dataset_id] = {
+                "filename": original_filename,
+                "path": str(destination),
+                "uploaded_at": datetime.now(UTC).isoformat(),
+            }
+            self._save(registry)
         return dataset_id
 
     def path(
