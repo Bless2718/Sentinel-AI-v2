@@ -33,6 +33,7 @@ export default function AnalysisUpload({
     useState<string | null>(null);
 
   const [retryCount, setRetryCount] = useState(0);
+  const [processing, setProcessing] = useState(false);
 
   const {
     getRootProps,
@@ -61,12 +62,14 @@ export default function AnalysisUpload({
       setDatasetId(null);
       setUploading(true);
       setRetryCount(0);
+      setProcessing(false);
       onDatasetUploaded("");
 
       try {
         const result = await uploadDataset(
           selectedFile,
           setRetryCount,
+          () => setProcessing(true),
         );
 
         setDatasetId(
@@ -83,6 +86,7 @@ export default function AnalysisUpload({
             : "Dataset upload failed.",
         );
       } finally {
+        setProcessing(false);
         setUploading(false);
       }
     },
@@ -119,14 +123,16 @@ export default function AnalysisUpload({
 
         <h3 className="mt-5 font-serif text-xl font-semibold tracking-[-0.01em] text-white">
           {uploading
-            ? "Uploading Dataset..."
+            ? processing ? "Processing Dataset..." : "Uploading Dataset..."
             : "Drag & Drop Dataset"}
         </h3>
 
         <p className="mt-2 font-serif text-slate-400">
-          {uploading && retryCount > 0
-            ? "Connecting securely and retrying your upload..."
-            : "CSV or Excel (.xlsx)"}
+          {processing
+            ? "File received. Validating and profiling your dataset..."
+            : uploading && retryCount > 0
+              ? "Connecting securely and retrying your upload..."
+              : "CSV or Excel (.xlsx)"}
         </p>
 
         {!uploading && (
